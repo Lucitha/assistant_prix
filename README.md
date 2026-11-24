@@ -104,3 +104,4 @@ Règles pour éviter les erreurs :
 
 ## Limites assumées et suite
 Voir [`docs/architecture_et_limites.md`](docs/architecture_et_limites.md) : prix réels (AgroFlux), code USSD réel au Bénin, appel vocal, voix en fon, validation des hypothèses.
+
