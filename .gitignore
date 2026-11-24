@@ -1,8 +1,18 @@
-.venv/
+# Environnements virtuels (ne jamais les envoyer sur GitHub)
+..venv-prix/
+.venv*/
+venv*/
+
+# Fichiers produits par Python et pytest
 __pycache__/
+*.pyc
 .pytest_cache/
-data/journal.csv
+
+# Secrets
 .env
-*.zip
-.azure/
+
+# Journal des requêtes (produit par le serveur, contient des empreintes de numéros)
+data/journal.csv
+
+# Outils locaux
 cloudflared.exe
