@@ -1,0 +1,9 @@
+produit,marche,unite,prix_fcfa,type_prix,date_releve,source
+mais,Savalou,sac,18000,detail,2026-11-20,DEMO
+mais,Bante,sac,17500,detail,2026-11-20,DEMO
+mais,Dassa,sac,22000,gros,2026-11-21,DEMO
+mais,Glazoue,sac,25000,gros,2026-11-21,DEMO
+piment,Savalou,kg,900,detail,2026-11-20,DEMO
+piment,Bante,kg,850,detail,2026-11-05,DEMO
+piment,Dassa,kg,1000,detail,2026-11-21,DEMO
+piment,Glazoue,kg,1100,gros,2026-11-21,DEMO

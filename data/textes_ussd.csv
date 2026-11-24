@@ -1,0 +1,21 @@
+cle,fr,fon,valide
+titre_langue,Prix du marché (SLAC)\nLangue:,Aximɛ akwɛ (SLAC)\nGbè:,a_valider
+titre_produit,Choisissez le produit:,Sɔ́ nǔ e è na sà é:,a_valider
+produit_mais,Maïs,Gbàdé,a_valider
+produit_piment,Piment,Takin,a_valider
+titre_unite,{produit}: quelle unité ?,{produit}: unité tɛ?,a_valider
+unite_sac,Sac,Adɔ́kpo,a_valider
+unite_bassine,Bassine,Basin,a_valider
+unite_bol,Bol,Gannu,a_valider
+unite_kg,Kg,kilo,a_valider
+titre_zone,Vous êtes près de :,A sɛkpɔ :,a_valider
+retour,Retour,Lɛkɔ,a_valider
+question_offre,Prix proposé par l'acheteur (FCFA) pour 1 {unite} ?\nTapez 0 si pas d'offre.,Akwɛ e xɔtɔ́ ɔ (FCFA) na nú 1 {unite} é? Mi wlan 0 nu nuɖe ma ɖo na xwlé mɛ a ɔ.,a_valider
+choix_invalide,Choix invalide. Recomposez le code.,Sɔ́ e ma sɔgbe ǎ é. Mi kɛnklɛn bo lɛ vɔ wlan kodu ɔ.,a_valider
+montant_invalide,Montant invalide. Tapez seulement des chiffres.,Akwɛ́ e ma sɔgbe ǎ é. Wlan kɛ́n lɛ kɛɖɛ.,a_valider
+aucun_prix,Aucun prix récent (moins de {jours} jours) pour {produit}/{unite} près de {localite}. Rappelez plus tard.,Akwɛ yɔyɔ ɖebu (ɖo {jours} gudo tɔn lɛ mɛ) nu {produit}/{unite} ɖo {localite} kpá a. Kɛnklɛn bo lɛ́vɔ wá kpɔ́n ɖò nukɔnmɛ.,a_valider
+entete_resultat,"{produit}/{unite}, net après frais:","{produit}/{unite}, akwɛ gudo:",a_valider
+pied_decider,À vous de décider.,É ɖò hwiɖesunɔ sí ɖɔ a ni wá gbeta ɔ kɔn.,a_valider
+pied_sous,Offre {offre}: {ecart} sous {marche}.,Nǔ e è nɔ xwlé mɛ é {offre}: {ecart} ɖò {marche} glɔ́.,a_valider
+pied_egale,Offre {offre}: égale ou au-dessus des marchés.,Offer {offre}: ɖo axi ɔ sin tɛnmɛ alo e yi ji.,a_valider
+alerte_cout,Attention: sous votre coût ({cout}).,Ayixa: ɖo akwɛ mitɔn glɔ ({cout}).,a_valider

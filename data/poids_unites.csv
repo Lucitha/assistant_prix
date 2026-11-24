@@ -1,0 +1,9 @@
+produit,unite,kg_moyen,valide
+mais,kg,1,oui
+mais,sac,100,a_valider
+mais,bassine,25,a_valider
+mais,bol,2.5,a_valider
+piment,kg,1,oui
+piment,sac,40,a_valider
+piment,bassine,10,a_valider
+piment,bol,0.5,a_valider
