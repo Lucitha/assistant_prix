@@ -1,6 +1,6 @@
 """Application web FastAPI : un seul moteur de prix, trois canaux.
 
-Lancer en local (depuis le dossier 01-agriculture) :
+Lancer en local (depuis le dossier assistant_prix) :
     python -m uvicorn src.app:app --reload
 Puis ouvrir :
     http://127.0.0.1:8000/simulateur   téléphone USSD, avec lecture vocale
@@ -79,7 +79,7 @@ def sante() -> dict[str, bool]:
 @app.get("/health")
 def health() -> dict[str, str]:
     """Alias anglais de /sante."""
-    return {"status": "ok", "session": "01-agriculture"}
+    return {"status": "ok", "service": "assistant-prix"}
 
 
 @app.post("/ussd", response_class=PlainTextResponse)

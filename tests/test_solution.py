@@ -1,4 +1,4 @@
-"""Tests automatiques de la session 01-agriculture. Lancer : pytest -x"""
+"""Tests automatiques de l'Assistant Prix. Lancer : pytest -x"""
 
 import csv
 from datetime import date
