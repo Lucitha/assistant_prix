@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulateur USSD et voix</title>
+<style>
+  :root { --fond: #e9ecf3; --coque: #1d2238; --ecran: #c9d8b6; --texte-ecran: #10140c;
+          --vert: #2f7a4b; --rouge: #8d3c3c; --info: #b9bed6; --blanc: #ffffff; }
+  body { font-family: system-ui, sans-serif; background: var(--fond); display: grid; place-items: center;
+         min-height: 100vh; margin: 0; padding: 16px; box-sizing: border-box; }
+  .tel { width: 100%; max-width: 320px; background: var(--coque); border-radius: 28px; padding: 22px 18px;
+         box-shadow: 0 10px 30px #0003; }
+  .ecran { background: var(--ecran); color: var(--texte-ecran); font: 15px/1.4 "Courier New", monospace;
+           min-height: 220px; padding: 12px; border-radius: 6px; white-space: pre-wrap; }
+  .saisie { display: flex; gap: 8px; margin-top: 12px; }
+  input[type=text] { flex: 1; min-width: 0; font-size: 18px; padding: 8px; border-radius: 6px; border: 0; }
+  button { font-size: 15px; padding: 8px 12px; border-radius: 6px; border: 0; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 2px solid #f2c14e; outline-offset: 2px; }
+  .ok { background: var(--vert); color: var(--blanc); }
+  .raz { background: var(--rouge); color: var(--blanc); width: 100%; margin-top: 8px; }
+  .voix { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px;
+          color: var(--blanc); font-size: 14px; }
+  .voix label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .reecouter { background: #3a4170; color: var(--blanc); }
+  .info { color: var(--info); font-size: 12px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="tel">
+  <div class="ecran" id="ecran" aria-live="polite">Appuyez sur « Composer » pour lancer *384*3328#</div>
+  <div class="saisie">
+    <input id="saisie" type="text" inputmode="numeric" autocomplete="off" aria-label="Saisie">
+    <button class="ok" id="envoyer" type="button">Envoyer</button>
+  </div>
+  <button class="raz" id="composer" type="button">Composer *384*3328#</button>
+  <div class="voix">
+    <label><input type="checkbox" id="lecture" checked> Lecture vocale</label>
+    <button class="reecouter" id="reecouter" type="button">Réécouter</button>
+  </div>
+  <div class="info" id="info">Saisies envoyées : (aucune)</div>
+  <div class="info" id="info-voix"></div>
+</div>
+<script>
+  // Reproduit Africa's Talking : chaque appel renvoie TOUTES les saisies
+  // depuis le début, séparées par des étoiles.
+  let saisies = [];
+  let enCours = false;
+  let dernierTexte = "";
+  let langueChoisie = "fr";
+
+  // ---------- Lecture vocale (synthèse vocale intégrée au navigateur) ----------
+  const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+                "août", "septembre", "octobre", "novembre", "décembre"];
+
+  function texteParlable(ecran) {
+    return ecran
+      .replace(/^(CON|END) /, "")
+      .replace(/\s*\((\d{2})\/(\d{2})\)/g, (m, j, mo) => ", relevé du " + parseInt(j, 10) + " " + MOIS[parseInt(mo, 10) - 1])
+      .replace(/(\d[\d ]*)F\b/g, (m, n) => n.replace(/ /g, "") + " francs CFA")
+      .replace(/^(\d)\. /gm, "Tapez $1 pour ")
+      .replace(/\//g, " au ")
+      .replace(/\n/g, ". ")
+      .replace(/:\./g, ":")
+      .replace(/\.\./g, ".");
+  }
+
+  function voixFrancaise() {
+    const voix = window.speechSynthesis ? speechSynthesis.getVoices() : [];
+    return voix.find(v => v.lang && v.lang.toLowerCase().startsWith("fr")) || null;
+  }
+
+  function lire(texte) {
+    const infoVoix = document.getElementById("info-voix");
+    if (langueChoisie === "fon") {
+      // Aucun navigateur n'a de voix fon : la lecture en fongbè viendra
+      // d'enregistrements faits par un locuteur (voir docs/GUIDE.md).
+      if (window.speechSynthesis) speechSynthesis.cancel();
+      infoVoix.textContent = "Lecture en fongbè : enregistrements d'un locuteur à venir.";
+      return;
+    }
+    if (!("speechSynthesis" in window)) {
+      infoVoix.textContent = "Ce navigateur ne sait pas lire à voix haute : utilisez Chrome ou Edge.";
+      return;
+    }
+    speechSynthesis.cancel();
+    const phrase = new SpeechSynthesisUtterance(texteParlable(texte));
+    phrase.lang = "fr-FR";
+    phrase.rate = 0.95;
+    const voix = voixFrancaise();
+    if (voix) { phrase.voice = voix; infoVoix.textContent = "Voix : " + voix.name; }
+    else { infoVoix.textContent = "Aucune voix française installée : la lecture peut avoir un accent."; }
+    speechSynthesis.speak(phrase);
+  }
+  if ("speechSynthesis" in window) { speechSynthesis.onvoiceschanged = voixFrancaise; }
+
+  // ---------- Dialogue USSD ----------
+  async function appeler() {
+    const corps = new URLSearchParams({ text: saisies.join("*") });
+    let donnees;
+    try {
+      const r = await fetch("/simulateur/ussd", { method: "POST", body: corps });
+      donnees = await r.json();
+    } catch (e) {
+      document.getElementById("ecran").textContent = "Serveur injoignable. Vérifiez qu'il tourne.";
+      return;
+    }
+    document.getElementById("ecran").textContent = donnees.ecran.slice(4);
+    const fini = donnees.ecran.startsWith("END");
+    document.getElementById("info").textContent =
+      "text envoyé = \"" + saisies.join("*") + "\" · " + (fini ? "session terminée" : "session en cours");
+    dernierTexte = donnees.a_lire;
+    langueChoisie = donnees.langue;
+    if (document.getElementById("lecture").checked) { lire(dernierTexte); }
+    if (fini) { saisies = []; enCours = false; }
+  }
+
+  document.getElementById("composer").onclick = () => { saisies = []; enCours = true; langueChoisie = "fr"; appeler(); };
+  function envoyer() {
+    if (!enCours) return;
+    const champ = document.getElementById("saisie");
+    saisies.push(champ.value.trim()); champ.value = ""; appeler();
+  }
+  document.getElementById("envoyer").onclick = envoyer;
+  document.getElementById("saisie").addEventListener("keydown", e => { if (e.key === "Enter") envoyer(); });
+  document.getElementById("reecouter").onclick = () => { if (dernierTexte) lire(dernierTexte); };
+  document.getElementById("lecture").onchange = e => { if (!e.target.checked && window.speechSynthesis) speechSynthesis.cancel(); };
+</script>
+</body>
+</html>
