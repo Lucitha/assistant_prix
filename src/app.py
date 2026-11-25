@@ -1,6 +1,6 @@
 """Application web FastAPI : un seul moteur de prix, trois canaux.
 
-Lancer en local (depuis le dossier assistant_prix) :
+Lancer en local (depuis le dossier 01-agriculture) :
     python -m uvicorn src.app:app --reload
 Puis ouvrir :
     http://127.0.0.1:8000/simulateur   téléphone USSD, avec lecture vocale
@@ -21,13 +21,13 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
-from src import prix, ussd, whatsapp
+from src import prix, telegram_bot, ussd, whatsapp
 from src.channels import handle_voice_call, handle_whatsapp_message
 
 app = FastAPI(title="Assistant Prix - Session 01 Agriculture", version="0.2.0")
 
 # Clé pour masquer les numéros dans le journal : à définir dans les réglages
-# Render (variable CLE_SECRETE), jamais dans le code.
+# Vercel (variable CLE_SECRETE), jamais dans le code.
 CLE_SECRETE = os.getenv("CLE_SECRETE", "changez-moi-en-production").encode()
 JOURNAL = Path(os.getenv("JOURNAL_PATH", str(prix.DATA_DIR / "journal.csv")))
 
@@ -79,7 +79,7 @@ def sante() -> dict[str, bool]:
 @app.get("/health")
 def health() -> dict[str, str]:
     """Alias anglais de /sante."""
-    return {"status": "ok", "service": "assistant-prix"}
+    return {"status": "ok", "session": "01-agriculture"}
 
 
 @app.post("/ussd", response_class=PlainTextResponse)
@@ -146,6 +146,22 @@ async def route_whatsapp_meta(request: Request) -> dict[str, int]:
         journaliser("whatsapp-meta", numero, message, "END " + texte)
         traites += 1
     return {"traites": traites}
+
+
+@app.post("/telegram")
+async def route_telegram(request: Request) -> dict[str, Any]:
+    """Bot Telegram : répond directement dans la réponse HTTP (méthode sendMessage)."""
+    secret = os.getenv("TELEGRAM_SECRET", "")
+    if secret and not telegram_bot.secret_valide(
+        secret, request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+    ):
+        return {}
+    mise_a_jour = await request.json()
+    chat_id, reponse = telegram_bot.reponse_telegram(mise_a_jour)
+    if chat_id:
+        texte = (mise_a_jour.get("message") or {}).get("text") or ""
+        journaliser("telegram", chat_id, texte, "END " + reponse["text"])
+    return reponse
 
 
 @app.post("/webhook/whatsapp")
