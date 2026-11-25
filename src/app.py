@@ -150,7 +150,7 @@ async def route_whatsapp_meta(request: Request) -> dict[str, int]:
 
 @app.post("/telegram")
 async def route_telegram(request: Request) -> dict[str, Any]:
-    """Bot Telegram : répond directement dans la réponse HTTP (méthode sendMessage)."""
+    """Bot Telegram : menu à boutons et texte libre ; répond dans la réponse HTTP."""
     secret = os.getenv("TELEGRAM_SECRET", "")
     if secret and not telegram_bot.secret_valide(
         secret, request.headers.get("X-Telegram-Bot-Api-Secret-Token")
@@ -158,9 +158,13 @@ async def route_telegram(request: Request) -> dict[str, Any]:
         return {}
     mise_a_jour = await request.json()
     chat_id, reponse = telegram_bot.reponse_telegram(mise_a_jour)
-    if chat_id:
-        texte = (mise_a_jour.get("message") or {}).get("text") or ""
-        journaliser("telegram", chat_id, texte, "END " + reponse["text"])
+    if chat_id and reponse:
+        journaliser(
+            "telegram",
+            chat_id,
+            telegram_bot.texte_recu(mise_a_jour),
+            "END " + str(reponse.get("text", "")),
+        )
     return reponse
 
 
