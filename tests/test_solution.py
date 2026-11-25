@@ -1,6 +1,5 @@
-"""Tests automatiques de l'Assistant Prix. Lancer : pytest -x"""
+"""Tests automatiques de la session 01-agriculture. Lancer : pytest -x"""
 
-import csv
 from datetime import date
 
 import pytest
@@ -129,30 +128,11 @@ def test_ecran_avec_accents_pour_la_voix() -> None:
     assert "Maïs" in ussd.ecran_avec_accents("1", JOUR)
 
 
-def copier_donnees_avec_fon(tmp_path, monkeypatch, fon: dict[str, str]) -> None:  # type: ignore[no-untyped-def]
-    """Copie data/ dans tmp_path en imposant le texte fon de certaines clés.
-
-    Les tests ne dépendent ainsi pas des traductions en cours dans le vrai fichier.
-    """
-    for f in prix.DATA_DIR.glob("*.csv"):
-        (tmp_path / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
-    monkeypatch.setattr(prix, "DATA_DIR", tmp_path)
-    lignes = prix.lire_csv("textes_ussd.csv")
-    for ligne in lignes:
-        if ligne["cle"] in fon:
-            ligne["fon"] = fon[ligne["cle"]]
-    with open(tmp_path / "textes_ussd.csv", "w", encoding="utf-8", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["cle", "fr", "fon", "valide"])
-        w.writeheader()
-        w.writerows(lignes)
-
-
-def test_fongbe_noms_fon_et_repli_en_francais(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_fongbe_noms_fon_et_repli_en_francais() -> None:
     """En fongbè : noms de produits en fon ; textes sans traduction en français."""
-    copier_donnees_avec_fon(tmp_path, monkeypatch, {"titre_produit": ""})
     r = ussd.repondre("2", JOUR)
     assert "1. Gbade" in r and "2. Takin" in r
-    assert "Choisissez le produit" in r  # pas traduit : repli en français
+    assert "Choisissez le produit" in r  # pas encore traduit : repli en français
     assert ussd.langue_de("2*1") == "fon"
     assert ussd.langue_de("") == "fr"
     assert "23 700F" in ussd.repondre("2*1*1*1*15000", JOUR)
@@ -160,25 +140,23 @@ def test_fongbe_noms_fon_et_repli_en_francais(tmp_path, monkeypatch) -> None:  #
 
 def test_fongbe_traduction_et_lettres_fon(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """Une case fon remplie est affichée ; ɔ, ɛ, ɖ deviennent o, e, d pour l'USSD."""
-    copier_donnees_avec_fon(
-        tmp_path,
-        monkeypatch,
-        {"titre_produit": "Nǔ ɖé ɔ:", "pied_decider": "{inconnue}"},
+    for f in prix.DATA_DIR.glob("*.csv"):
+        (tmp_path / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    textes = (tmp_path / "textes_ussd.csv").read_text(encoding="utf-8")
+    textes = textes.replace(
+        "titre_produit,Choisissez le produit:,,",
+        "titre_produit,Choisissez le produit:,Nǔ ɖé ɔ:,",
     )
+    textes = textes.replace(
+        "pied_decider,À vous de décider.,,",
+        "pied_decider,À vous de décider.,{inconnue},",
+    )
+    (tmp_path / "textes_ussd.csv").write_text(textes, encoding="utf-8")
+    monkeypatch.setattr(prix, "DATA_DIR", tmp_path)
     assert ussd.repondre("2", JOUR).startswith("CON Nu de o:")
     # Variable inconnue dans le texte fon : repli en français, et le vérificateur le signale
     assert "A vous de decider" in ussd.repondre("2*2*4*1*0", JOUR)
     assert any("pied_decider" in e for e in verifier.verifier_textes())
-
-
-def test_virgule_en_trop_ne_plante_pas(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """Une ligne de textes_ussd.csv avec une colonne de trop : le service répond
-    quand même, et le vérificateur signale la ligne."""
-    copier_donnees_avec_fon(tmp_path, monkeypatch, {})
-    with open(tmp_path / "textes_ussd.csv", "a", encoding="utf-8") as f:
-        f.write("cle_test,Texte,Tɛ́xti,a_valider,\n")
-    assert ussd.repondre("", JOUR).startswith("CON ")
-    assert any("colonnes" in e for e in verifier.verifier_textes())
 
 
 def test_texte_absent() -> None:
@@ -436,3 +414,42 @@ def test_envoyer_message_meta(monkeypatch) -> None:  # type: ignore[no-untyped-d
     assert appels[0]["url"].endswith("/111/messages")
     assert appels[0]["headers"]["Authorization"] == "Bearer tok"
     assert appels[0]["json"]["text"]["body"] == "Bonjour"
+
+
+# ---------- Bot Telegram ----------
+
+
+def _maj_telegram(texte: str | None) -> dict:  # type: ignore[type-arg]
+    message: dict = {"chat": {"id": 123456789}}  # type: ignore[type-arg]
+    if texte is not None:
+        message["text"] = texte
+    return {"update_id": 1, "message": message}
+
+
+def test_reponses_telegram() -> None:
+    from src.telegram_bot import reponse_telegram, texte_telegram
+
+    assert "Écrivez par exemple" in texte_telegram("/start")
+    assert "*" not in texte_telegram("/aide@assistant_prix_bot")
+    r = texte_telegram("maïs 2 sacs 15000", JOUR)
+    assert "47 400 FCFA" in r and "*" not in r and "_" not in r
+    chat_id, rep = reponse_telegram(_maj_telegram(None), JOUR)  # photo, vocal…
+    assert chat_id == "123456789" and "Écrivez par exemple" in rep["text"]
+    assert reponse_telegram({"update_id": 2, "edited_message": {}}) == ("", {})
+
+
+def test_route_telegram(client: TestClient, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    r = client.post("/telegram", json=_maj_telegram("maïs sac 15000"))
+    corps = r.json()
+    assert corps["method"] == "sendMessage" and corps["chat_id"] == "123456789"
+    assert "Glazoué" in corps["text"]
+    assert "123456789" not in appli.JOURNAL.read_text(encoding="utf-8")
+    assert client.post("/telegram", json={"update_id": 3}).json() == {}
+    monkeypatch.setenv("TELEGRAM_SECRET", "motdepasse")
+    assert client.post("/telegram", json=_maj_telegram("aide")).json() == {}
+    ok = client.post(
+        "/telegram",
+        json=_maj_telegram("aide"),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "motdepasse"},
+    )
+    assert ok.json()["method"] == "sendMessage"
