@@ -419,23 +419,104 @@ def test_envoyer_message_meta(monkeypatch) -> None:  # type: ignore[no-untyped-d
 # ---------- Bot Telegram ----------
 
 
-def _maj_telegram(texte: str | None) -> dict:  # type: ignore[type-arg]
-    message: dict = {"chat": {"id": 123456789}}  # type: ignore[type-arg]
+def _maj_telegram(texte: str | None, question: str | None = None) -> dict:  # type: ignore[type-arg]
+    message: dict = {"message_id": 7, "chat": {"id": 123456789}}  # type: ignore[type-arg]
     if texte is not None:
         message["text"] = texte
+    if question is not None:
+        message["reply_to_message"] = {"text": question}
     return {"update_id": 1, "message": message}
 
 
-def test_reponses_telegram() -> None:
+def _bouton(donnees: str) -> dict:  # type: ignore[type-arg]
+    return {
+        "update_id": 2,
+        "callback_query": {
+            "id": "42",
+            "data": donnees,
+            "message": {"message_id": 9, "chat": {"id": 123456789}},
+        },
+    }
+
+
+def _libelles(reponse: dict) -> list[str]:  # type: ignore[type-arg]
+    return [ligne[0]["text"] for ligne in reponse["reply_markup"]["inline_keyboard"]]
+
+
+def test_telegram_texte_libre() -> None:
     from src.telegram_bot import reponse_telegram, texte_telegram
 
-    assert "Écrivez par exemple" in texte_telegram("/start")
-    assert "*" not in texte_telegram("/aide@assistant_prix_bot")
+    assert "/start" in texte_telegram("/aide")
+    assert "/start" in texte_telegram("bonjour")
     r = texte_telegram("maïs 2 sacs 15000", JOUR)
     assert "47 400 FCFA" in r and "*" not in r and "_" not in r
-    chat_id, rep = reponse_telegram(_maj_telegram(None), JOUR)  # photo, vocal…
-    assert chat_id == "123456789" and "Écrivez par exemple" in rep["text"]
-    assert reponse_telegram({"update_id": 2, "edited_message": {}}) == ("", {})
+    _, photo = reponse_telegram(_maj_telegram(None), JOUR)
+    assert "Écrivez par exemple" in photo["text"]
+    assert reponse_telegram({"update_id": 3, "edited_message": {}}) == ("", {})
+
+
+def test_telegram_menu_langue_puis_produit() -> None:
+    from src.telegram_bot import reponse_telegram
+
+    _, accueil = reponse_telegram(_maj_telegram("/start"), JOUR)
+    assert accueil["method"] == "sendMessage"
+    assert _libelles(accueil) == ["Français", "Fongbè"]
+    assert accueil["reply_markup"]["inline_keyboard"][1][0]["callback_data"] == "2"
+
+    _, fon = reponse_telegram(_bouton("2"), JOUR)
+    assert fon["method"] == "editMessageText" and fon["message_id"] == 9
+    assert _libelles(fon)[:2] == ["Gbàdé", "Takin"]  # noms fon, avec leurs accents
+    assert fon["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "2*1"
+    assert _libelles(fon)[-1] == "↩ Retour"
+
+
+def test_telegram_parcours_complet_avec_offre() -> None:
+    from src.telegram_bot import reponse_telegram
+
+    _, question = reponse_telegram(_bouton("1*1*1*1"), JOUR)
+    assert question["reply_markup"] == {
+        "force_reply": True,
+        "input_field_placeholder": "15000",
+    }
+    assert question["text"].endswith("(réf. 1*1*1*1)")
+
+    _, resultat = reponse_telegram(_maj_telegram("15 000", question["text"]), JOUR)
+    assert "Glazoué 23 700F (21/11)" in resultat["text"]
+    assert "8 700F sous Glazoué" in resultat["text"]
+    assert _libelles(resultat) == ["🔁 Nouvelle recherche"]
+
+    _, nouveau = reponse_telegram(_bouton("menu"), JOUR)
+    assert _libelles(nouveau) == ["Français", "Fongbè"]
+
+
+def test_telegram_boutons_invalides() -> None:
+    from src.telegram_bot import reponse_telegram
+
+    assert reponse_telegram(_bouton("1*1; rm -rf"), JOUR) == ("123456789", {})
+    _, fin = reponse_telegram(_bouton("9"), JOUR)
+    assert "Choix invalide" in fin["text"]
+    assert reponse_telegram({"update_id": 4, "callback_query": {"data": "1"}}) == (
+        "",
+        {},
+    )
+
+
+def test_telegram_sablier(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    import src.telegram_bot as tg
+
+    appels: list[str] = []
+    monkeypatch.setattr(tg.httpx, "post", lambda url, **kw: appels.append(url))
+    tg.arreter_sablier("42")
+    assert appels == []  # pas de jeton : rien n'est envoyé
+    monkeypatch.setenv("TELEGRAM_TOKEN", "jeton")
+    tg.arreter_sablier("42")
+    assert appels[0].endswith("/botjeton/answerCallbackQuery")
+
+    def panne(url: str, **kw: object) -> None:
+        raise tg.httpx.ConnectError("hors ligne")
+
+    monkeypatch.setattr(tg.httpx, "post", panne)
+    tg.arreter_sablier("42")  # une panne réseau ne bloque pas la réponse
 
 
 def test_route_telegram(client: TestClient, monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -443,7 +524,11 @@ def test_route_telegram(client: TestClient, monkeypatch) -> None:  # type: ignor
     corps = r.json()
     assert corps["method"] == "sendMessage" and corps["chat_id"] == "123456789"
     assert "Glazoué" in corps["text"]
-    assert "123456789" not in appli.JOURNAL.read_text(encoding="utf-8")
+    assert client.post("/telegram", json=_bouton("1")).json()["method"] == (
+        "editMessageText"
+    )
+    journal = appli.JOURNAL.read_text(encoding="utf-8")
+    assert "123456789" not in journal and "bouton:1" in journal
     assert client.post("/telegram", json={"update_id": 3}).json() == {}
     monkeypatch.setenv("TELEGRAM_SECRET", "motdepasse")
     assert client.post("/telegram", json=_maj_telegram("aide")).json() == {}
